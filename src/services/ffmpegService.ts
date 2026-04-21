@@ -13,13 +13,23 @@ export async function getFFmpeg() {
   if (ffmpeg) return ffmpeg;
 
   ffmpeg = new FFmpeg();
+  
+  // Use a more robust CDN version if unpkg is hanging
   const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-  });
-
-  return ffmpeg;
+  
+  try {
+    const loaded = await Promise.race([
+      ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Media Engine Timeout')), 30000))
+    ]);
+    return ffmpeg;
+  } catch (err) {
+    ffmpeg = null; // Reset on failure
+    throw err;
+  }
 }
 
 export async function exportVideo(
@@ -106,48 +116,55 @@ export async function extractDownsampledAudio(
   file: File,
   onProgress?: (progress: number, phase?: string) => void
 ): Promise<Blob> {
+  if (onProgress) onProgress(2, 'Booting Media Engine...');
   const ffmpeg = await getFFmpeg();
+  
   const filename = 'input_audio_extract';
   const extension = file.name.split('.').pop() || 'mp4';
   const inputName = `${filename}.${extension}`;
   const outputName = 'downsampled.wav';
 
   const progressHandler = ({ progress }: { progress: number }) => {
-    if (onProgress) onProgress(progress * 100, 'Processing Streams...');
+    // FFmpeg progress is 0-1, convert to 0-100
+    if (onProgress) onProgress(progress * 100, 'Analyzing Bitstream...');
   };
 
   if (onProgress) {
     ffmpeg.on('progress', progressHandler);
-    onProgress(5, 'Preparing Workspace...');
+    onProgress(10, 'Preparing Virtual File System...');
   }
 
   // Pre-fetch file data
-  const fileData = await fetchFile(file);
-  if (onProgress) onProgress(15, 'Transferring Data...');
-  
-  await ffmpeg.writeFile(inputName, fileData);
-  if (onProgress) onProgress(25, 'Starting Extraction...');
+  try {
+    const fileData = await fetchFile(file);
+    if (onProgress) onProgress(20, 'Caching Video Data...');
+    
+    await ffmpeg.writeFile(inputName, fileData);
+    if (onProgress) onProgress(30, 'Scanning Audio Streams...');
 
-  // Extract audio, convert to mono, 16kHz sample rate
-  // -vn: ignore video (huge speedup for probe)
-  // -sn: ignore subtitles
-  // -dn: ignore data
-  await ffmpeg.exec([
-    '-i', inputName,
-    '-vn', '-sn', '-dn',
-    '-ar', '16000',
-    '-ac', '1',
-    outputName
-  ]);
+    // Extract audio, convert to mono, 16kHz sample rate
+    // -vn: ignore video (huge speedup for probe)
+    await ffmpeg.exec([
+      '-i', inputName,
+      '-vn', '-sn', '-dn',
+      '-ar', '16000',
+      '-ac', '1',
+      outputName
+    ]);
 
-  const data = await ffmpeg.readFile(outputName);
-  
-  if (onProgress) {
-    ffmpeg.off('progress', progressHandler);
+    const data = await ffmpeg.readFile(outputName);
+    
+    if (onProgress) {
+      ffmpeg.off('progress', progressHandler);
+    }
+
+    await ffmpeg.deleteFile(inputName);
+    await ffmpeg.deleteFile(outputName);
+
+    return new Blob([(data as any).buffer], { type: 'audio/wav' });
+  } catch (error) {
+    console.error('FFmpeg Critical Error:', error);
+    if (onProgress) ffmpeg.off('progress', progressHandler);
+    throw error;
   }
-
-  await ffmpeg.deleteFile(inputName);
-  await ffmpeg.deleteFile(outputName);
-
-  return new Blob([(data as any).buffer], { type: 'audio/wav' });
 }

@@ -47,8 +47,8 @@ export const Header: React.FC = () => {
 
     reset();
     setIsAnalyzing(true);
-    setAnalysisProgress(0);
-    setAnalysisPhase('Initializing...');
+    setAnalysisProgress(1);
+    setAnalysisPhase('Loading Engine UI...');
     
     try {
       const url = URL.createObjectURL(file);
@@ -79,11 +79,13 @@ export const Header: React.FC = () => {
       }]);
 
       // Stage 1: Extraction
-      setAnalysisPhase('Extracting Audio Cache...');
+      setAnalysisPhase('Booting Media Engine...');
+      setAnalysisProgress(5); // Immediate visual kick
+      
       const buffer = await getAudioBuffer(file, (p, phase) => {
         if (phase) setAnalysisPhase(phase);
-        // Map 0-100 to 0-50 range
-        setAnalysisProgress(Math.floor(p * 0.5));
+        // Map 0-100 to 5-55 range to ensure we never sit at 0
+        setAnalysisProgress(5 + Math.floor(p * 0.5));
       });
       
       // Artificial bump for decoding phase visibility

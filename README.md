@@ -1,7 +1,20 @@
-Welcome to Video MayMay!
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-A simple app that allows a user to upload any mp4 file, remove all silenced audio and make quick cuts and scrub through the video and then download the mp4 to help save time.
+# Run and deploy your AI Studio app
 
-I personally use it for Course Creation for my Agentic Operator (AI) Community on Skool and YouTube videos but you can use it for any mp4 editing.
+This contains everything you need to run your app locally.
 
-Cheers!
+View your app in AI Studio: https://ai.studio/apps/fb03c6bf-9989-40de-98e5-a7255e631c8a
+
+## Run Locally
+
+**Prerequisites:**  Node.js
+
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
