@@ -14,21 +14,38 @@ export async function getFFmpeg() {
 
   ffmpeg = new FFmpeg();
   
-  // Use a more robust CDN version if unpkg is hanging
-  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+  // Use JSDelivr as primary, unpkg as fallback for better reliability
+  const jsDelivrURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
   
-  try {
-    const loaded = await Promise.race([
-      ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+  const loadWithTimeout = async (url: string, timeoutMs: number) => {
+    return Promise.race([
+      ffmpeg!.load({
+        coreURL: await toBlobURL(`${url}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${url}/ffmpeg-core.wasm`, 'application/wasm'),
       }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Media Engine Timeout')), 30000))
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Media Engine Timeout')), timeoutMs)
+      )
     ]);
+  };
+
+  try {
+    // Try JSDelivr first with a generous 90s timeout
+    await loadWithTimeout(jsDelivrURL, 90000);
     return ffmpeg;
   } catch (err) {
-    ffmpeg = null; // Reset on failure
-    throw err;
+    console.warn('Failed to load FFmpeg from primary CDN, trying fallback...', err);
+    
+    // Reset and try unpkg fallback
+    try {
+      ffmpeg = new FFmpeg();
+      const unpkgURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+      await loadWithTimeout(unpkgURL, 90000);
+      return ffmpeg;
+    } catch (fallbackErr) {
+      ffmpeg = null;
+      throw new Error('Media Engine failed to start after multiple attempts. Please check your internet connection.');
+    }
   }
 }
 

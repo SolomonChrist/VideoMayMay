@@ -79,7 +79,7 @@ export const Header: React.FC = () => {
       }]);
 
       // Stage 1: Extraction
-      setAnalysisPhase('Booting Media Engine...');
+      setAnalysisPhase('Downloading Media Engine...');
       setAnalysisProgress(5); // Immediate visual kick
       
       const buffer = await getAudioBuffer(file, (p, phase) => {
